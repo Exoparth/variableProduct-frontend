@@ -9,6 +9,7 @@ function AddProduct() {
   const [sku, setSku] = useState("");
   const [attributeValues, setAttributeValues] = useState({});
   const [variantPrices, setVariantPrices] = useState([]);
+  const [variantImages, setVariantImages] = useState([]);
 
   function generateCombinations(optionAttrs, valuesMap) {
     // Filter out attributes with no selected values
@@ -79,6 +80,7 @@ function AddProduct() {
         return existing || newCombo;
       });
     });
+    setVariantImages(combos.map(() => []));
   }, [attributeValues, selectedSetAttributes]);
 
   useEffect(() => {
@@ -132,6 +134,7 @@ function AddProduct() {
         return {
           sku: `${sku}-${i + 1}`,
           price: variant.price || 0,
+          images: variantImages[i] || [],
           attributes: [
             ...combo.map(({ label, value }) => ({ label, value })),
             ...selectedSetAttributes
@@ -160,9 +163,40 @@ function AddProduct() {
       setSelectedSetAttributes([]);
       setAttributeValues({});
       setVariantPrices([]);
+      setVariantImages([]);
     } catch (err) {
       console.error(err);
       alert("Error creating product: " + err.message);
+    }
+  };
+
+  const handleVariantImages = async (index, files) => {
+    if (files.length > 5) {
+      alert("Maximum 5 images per variant allowed");
+      return;
+    }
+
+    const formData = new FormData();
+    for (let f of files) {
+      formData.append("images", f);
+    }
+
+    try {
+      const res = await axios.post(
+        "http://localhost:5000/api/upload/variant-images",
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
+
+      const uploaded = res.data.imagePaths;
+      const updated = [...variantImages];
+      updated[index] = uploaded;
+      setVariantImages(updated);
+    } catch (err) {
+      console.error(err);
+      alert("Image upload failed");
     }
   };
 
@@ -240,34 +274,94 @@ function AddProduct() {
 
         {variantPrices.length > 0 && (
           <div>
-            <h4>Enter Price per Variant:</h4>
+            <h4>Variant Details:</h4>
             {variantPrices.map((variant, i) => {
               // Safely get the combo array
               const combo = Array.isArray(variant.combo) ? variant.combo : [];
 
               return (
-                <div key={i} style={{ marginBottom: "10px" }}>
-                  <strong>
-                    Variant {i + 1}:{" "}
-                    {combo.map((c, idx) => (
-                      <span key={idx}>
-                        {c.label}: {c.value}
-                        {idx < combo.length - 1 ? ", " : ""}
-                      </span>
-                    ))}
-                  </strong>
-                  <br />
-                  <input
-                    type="number"
-                    value={variant.price || 0}
-                    onChange={(e) => {
-                      const updated = [...variantPrices];
-                      updated[i].price = parseFloat(e.target.value) || 0;
-                      setVariantPrices(updated);
-                    }}
-                    placeholder="Price"
-                    required
-                  />
+                <div
+                  key={i}
+                  style={{
+                    marginBottom: "20px",
+                    padding: "15px",
+                    border: "1px solid #ddd",
+                    borderRadius: "5px",
+                    display: "flex",
+                    gap: "20px",
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <strong>
+                      Variant {i + 1}:{" "}
+                      {combo.map((c, idx) => (
+                        <span key={idx}>
+                          {c.label}: {c.value}
+                          {idx < combo.length - 1 ? ", " : ""}
+                        </span>
+                      ))}
+                    </strong>
+                    <div style={{ marginTop: "10px" }}>
+                      <label>Price:</label>
+                      <input
+                        type="number"
+                        value={variant.price || 0}
+                        onChange={(e) => {
+                          const updated = [...variantPrices];
+                          updated[i].price = parseFloat(e.target.value) || 0;
+                          setVariantPrices(updated);
+                        }}
+                        placeholder="Price"
+                        required
+                        style={{ width: "100%" }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    <label>Images (max 5):</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => handleVariantImages(i, e.target.files)}
+                      style={{ marginBottom: "10px", width: "100%" }}
+                    />
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "10px",
+                      }}
+                    >
+                      {(variantImages[i] || []).map((img, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            width: "60px",
+                            height: "60px",
+                            overflow: "hidden",
+                            borderRadius: "4px",
+                            position: "relative",
+                          }}
+                        >
+                          <img
+                            src={
+                              typeof img === "string"
+                                ? img
+                                : URL.createObjectURL(img)
+                            }
+                            alt={`Variant ${i + 1} image ${idx + 1}`}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               );
             })}
